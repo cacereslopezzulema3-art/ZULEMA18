@@ -3,310 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Estudiantes y Asistencias</title>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <title>Lector QR y Registro</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1, h2 { color: #2c3e50; text-align: center; }
-        .controls { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-        button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; transition: 0.3s; }
-        button:hover { opacity: 0.8; }
-        .btn-add { background-color: #007bff; }
-        .btn-export { background-color: #6c757d; }
-        .btn-qr { background-color: #17a2b8; }
-        .btn-edit { background-color: #ffc107; color: #000; padding: 5px 10px; margin-right: 5px;}
-        .btn-delete { background-color: #dc3545; padding: 5px 10px; }
-        .btn-attendance { background-color: #28a745; padding: 5px 10px; margin-right: 5px;}
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-        th { background-color: #2c3e50; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        tr:hover { background-color: #f1f1f1; }
-        
-        #qr-section { display: none; text-align: center; margin-bottom: 20px; padding: 20px; border: 2px dashed #17a2b8; border-radius: 10px; }
-        #reader { width: 100%; max-width: 400px; margin: 0 auto; }
+        :root {
+            --primary-color: #007bff;
+            --danger-color: #dc3545;
+            --bg-color: #f4f7f6;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        #reader {
+            width: 100%;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            display: none; /* Oculto por defecto */
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        .btn:active {
+            opacity: 0.8;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .history-container {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .history-item {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .history-item strong {
+            display: block;
+            color: var(--primary-color);
+            margin-bottom: 4px;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Panel de Control Estudiantil</h1>
-    
-    <div class="controls">
-        <button class="btn-add" onclick="añadirEstudiante()">+ Nuevo Estudiante</button>
-        <button class="btn-qr" onclick="toggleQRScanner()">📷 Escanear QR para Asistencia</button>
-        <button class="btn-export" onclick="exportarBackup()">💾 Exportar Backup (JS)</button>
-    </div>
-
-    <div id="qr-section">
-        <h2>Lector de Asistencia QR</h2>
-        <p>Escanea un código QR que contenga el DNI del estudiante.</p>
-        <div id="reader"></div>
-        <button class="btn-delete" style="margin-top: 10px;" onclick="toggleQRScanner()">Cerrar Lector</button>
-    </div>
-
-    <div style="overflow-x: auto;">
-        <table id="studentsTable">
-            <thead>
-                <tr>
-                    <th>DNI</th>
-                    <th>Nombres</th>
-                    <th>Apellidos</th>
-                    <th>Género</th>
-                    <th>Edad</th>
-                    <th>Teléfono</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
-    </div>
-</div>
-
-<script>
-    // --- 1. DATOS INICIALES (Los 20 registros solicitados) ---
-    const datosBase = [
-        { dni: "72345678", nombres: "Luis Alberto", apellidos: "Vargas Torres", genero: "M", edad: 20, telefono: "987654321", asistencias: [] },
-        { dni: "74561234", nombres: "María Fernanda", apellidos: "Quispe Mendoza", genero: "F", edad: 19, telefono: "912345678", asistencias: [] },
-        { dni: "71238945", nombres: "Juan Carlos", apellidos: "Flores Silva", genero: "M", edad: 21, telefono: "956789123", asistencias: [] },
-        { dni: "78901234", nombres: "Ana Lucía", apellidos: "Rojas Condori", genero: "F", edad: 20, telefono: "934567890", asistencias: [] },
-        { dni: "75672341", nombres: "Pedro Pablo", apellidos: "Sánchez Gutiérrez", genero: "M", edad: 22, telefono: "998877665", asistencias: [] },
-        { dni: "73459012", nombres: "Valeria Soledad", apellidos: "Mamani Huamán", genero: "F", edad: 18, telefono: "976543210", asistencias: [] },
-        { dni: "79012345", nombres: "Diego Alonso", apellidos: "Castro Paredes", genero: "M", edad: 23, telefono: "923456789", asistencias: [] },
-        { dni: "76789012", nombres: "Camila Belén", apellidos: "Morales Díaz", genero: "F", edad: 19, telefono: "945678901", asistencias: [] },
-        { dni: "70123456", nombres: "Renzo Fabricio", apellidos: "Chuquimia León", genero: "M", edad: 20, telefono: "987123456", asistencias: [] },
-        { dni: "72389014", nombres: "Sofía Valentina", apellidos: "Ríos Ortiz", genero: "F", edad: 21, telefono: "912987654", asistencias: [] },
-        { dni: "78456123", nombres: "Miguel Ángel", apellidos: "Castillo Reyes", genero: "M", edad: 24, telefono: "956345678", asistencias: [] },
-        { dni: "71567890", nombres: "Daniela Paz", apellidos: "Romero Vega", genero: "F", edad: 18, telefono: "934901234", asistencias: [] },
-        { dni: "74901235", nombres: "Carlos Eduardo", apellidos: "Espinoza Cárdenas", genero: "M", edad: 20, telefono: "998112233", asistencias: [] },
-        { dni: "76234567", nombres: "Luciana Mía", apellidos: "Herrera Acosta", genero: "F", edad: 19, telefono: "976889900", asistencias: [] },
-        { dni: "73890124", nombres: "Sebastián Mateo", apellidos: "Cruz Villanueva", genero: "M", edad: 22, telefono: "923112233", asistencias: [] },
-        { dni: "79567891", nombres: "Andrea Carolina", apellidos: "Cabrera Pinto", genero: "F", edad: 21, telefono: "945998877", asistencias: [] },
-        { dni: "70678912", nombres: "Jorge Luis", apellidos: "Salazar Ramos", genero: "M", edad: 25, telefono: "987554433", asistencias: [] },
-        { dni: "75123457", nombres: "Gabriela Inés", apellidos: "Medina Navarro", genero: "F", edad: 20, telefono: "912667788", asistencias: [] },
-        { dni: "77890123", nombres: "Fernando José", apellidos: "Aguilar Gómez", genero: "M", edad: 19, telefono: "956778899", asistencias: [] },
-        { dni: "71345679", nombres: "Fátima Rosa", apellidos: "Suárez Pineda", genero: "F", edad: 23, telefono: "934113355", asistencias: [] }
-    ];
-
-    // Cargar datos de LocalStorage o usar la base si es la primera vez
-    let estudiantes = JSON.parse(localStorage.getItem('estudiantesBackup')) || datosBase;
-
-    // --- 2. RENDERIZADO DE TABLA ---
-    function renderTabla() {
-        const tbody = document.querySelector('#studentsTable tbody');
-        tbody.innerHTML = '';
-        estudiantes.forEach((est, index) => {
-            tbody.innerHTML += `
-                <tr>
-                    <td>${est.dni}</td>
-                    <td>${est.nombres}</td>
-                    <td>${est.apellidos}</td>
-                    <td>${est.genero}</td>
-                    <td>${est.edad}</td>
-                    <td>${est.telefono}</td>
-                    <td>
-                        <button class="btn-attendance" onclick="gestionarAsistencia(${index})" title="Ver/Añadir Asistencia">📅</button>
-                        <button class="btn-edit" onclick="editarEstudiante(${index})" title="Editar">✏️</button>
-                        <button class="btn-delete" onclick="eliminarEstudiante(${index})" title="Eliminar">🗑️</button>
-                    </td>
-                </tr>
-            `;
-        });
-        localStorage.setItem('estudiantesBackup', JSON.stringify(estudiantes));
-    }
-
-    // --- 3. CRUD: AÑADIR ---
-    async function añadirEstudiante() {
-        const { value: formValues } = await Swal.fire({
-            title: 'Nuevo Estudiante',
-            html:
-                `<input id="swal-dni" class="swal2-input" placeholder="DNI (8 dígitos)">
-                 <input id="swal-nom" class="swal2-input" placeholder="Nombres">
-                 <input id="swal-ape" class="swal2-input" placeholder="Apellidos">
-                 <select id="swal-gen" class="swal2-input"><option value="M">Masculino</option><option value="F">Femenino</option></select>
-                 <input id="swal-edad" type="number" class="swal2-input" placeholder="Edad">
-                 <input id="swal-tel" class="swal2-input" placeholder="Teléfono">`,
-            focusConfirm: false,
-            showCancelButton: true,
-            confirmButtonText: 'Guardar',
-            preConfirm: () => {
-                return {
-                    dni: document.getElementById('swal-dni').value,
-                    nombres: document.getElementById('swal-nom').value,
-                    apellidos: document.getElementById('swal-ape').value,
-                    genero: document.getElementById('swal-gen').value,
-                    edad: document.getElementById('swal-edad').value,
-                    telefono: document.getElementById('swal-tel').value,
-                    asistencias: []
-                }
-            }
-        });
-
-        if (formValues && formValues.dni && formValues.nombres) {
-            estudiantes.push(formValues);
-            renderTabla();
-            Swal.fire('Registrado', 'Estudiante guardado exitosamente', 'success');
-        }
-    }
-
-    // --- 4. CRUD: EDITAR ---
-    async function editarEstudiante(index) {
-        const est = estudiantes[index];
-        const { value: formValues } = await Swal.fire({
-            title: 'Editar Estudiante',
-            html:
-                `<input id="swal-dni" class="swal2-input" value="${est.dni}">
-                 <input id="swal-nom" class="swal2-input" value="${est.nombres}">
-                 <input id="swal-ape" class="swal2-input" value="${est.apellidos}">
-                 <select id="swal-gen" class="swal2-input">
-                    <option value="M" ${est.genero==='M'?'selected':''}>Masculino</option>
-                    <option value="F" ${est.genero==='F'?'selected':''}>Femenino</option>
-                 </select>
-                 <input id="swal-edad" type="number" class="swal2-input" value="${est.edad}">
-                 <input id="swal-tel" class="swal2-input" value="${est.telefono}">`,
-            showCancelButton: true,
-            confirmButtonText: 'Actualizar',
-            preConfirm: () => {
-                return {
-                    dni: document.getElementById('swal-dni').value,
-                    nombres: document.getElementById('swal-nom').value,
-                    apellidos: document.getElementById('swal-ape').value,
-                    genero: document.getElementById('swal-gen').value,
-                    edad: document.getElementById('swal-edad').value,
-                    telefono: document.getElementById('swal-tel').value,
-                    asistencias: est.asistencias // Mantener asistencias previas
-                }
-            }
-        });
-
-        if (formValues) {
-            estudiantes[index] = formValues;
-            renderTabla();
-            Swal.fire('Actualizado', 'Datos modificados correctamente', 'success');
-        }
-    }
-
-    // --- 5. CRUD: ELIMINAR ---
-    function eliminarEstudiante(index) {
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: "No podrás revertir esto",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#dc3545',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                estudiantes.splice(index, 1);
-                renderTabla();
-                Swal.fire('Eliminado', 'El registro ha sido borrado.', 'success');
-            }
-        })
-    }
-
-    // --- 6. GESTIÓN DE ASISTENCIA MANUAL ---
-    function gestionarAsistencia(index) {
-        const est = estudiantes[index];
-        let listaHTML = est.asistencias.length === 0 ? '<p>No hay registros.</p>' : 
-            '<ul style="text-align:left;">' + est.asistencias.map(a => `<li>${a}</li>`).join('') + '</ul>';
-
-        Swal.fire({
-            title: `Asistencias de ${est.nombres}`,
-            html: listaHTML,
-            showDenyButton: true,
-            confirmButtonText: 'Cerrar',
-            denyButtonText: `+ Registrar Hoy`,
-            denyButtonColor: '#28a745'
-        }).then((result) => {
-            if (result.isDenied) {
-                const hoy = new Date().toLocaleString();
-                estudiantes[index].asistencias.push(hoy);
-                renderTabla();
-                Swal.fire('Asistencia Registrada', `Fecha: ${hoy}`, 'success');
-            }
-        });
-    }
-
-    // --- 7. EXPORTAR BACKUP JS ---
-    function exportarBackup() {
-        const dataStr = "const backupEstudiantes = " + JSON.stringify(estudiantes, null, 2) + ";\n// Guarda este archivo como backup_datos.js";
-        const blob = new Blob([dataStr], { type: "text/javascript" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `backup_estudiantes_${new Date().getTime()}.js`;
-        a.click();
-        URL.revokeObjectURL(url);
-        Swal.fire('Exportado', 'Archivo JS generado y descargado', 'success');
-    }
-
-    // --- 8. LECTOR DE QR PARA ASISTENCIA ---
-    let html5QrcodeScanner;
-    let qrVisible = false;
-
-    function toggleQRScanner() {
-        const section = document.getElementById('qr-section');
-        if (!qrVisible) {
-            section.style.display = 'block';
-            // Configurar el escáner
-            html5QrcodeScanner = new Html5QrcodeScanner(
-                "reader", { fps: 10, qrbox: {width: 250, height: 250} }, /* verbose= */ false);
-            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-            qrVisible = true;
-        } else {
-            section.style.display = 'none';
-            if(html5QrcodeScanner) {
-                html5QrcodeScanner.clear();
-            }
-            qrVisible = false;
-        }
-    }
-
-    function onScanSuccess(decodedText, decodedResult) {
-        // Asumimos que el QR contiene el DNI del estudiante
-        const dniEscaneado = decodedText.trim();
-        const index = estudiantes.findIndex(e => e.dni === dniEscaneado);
+    <div class="container">
+        <h2>Lector de Códigos QR</h2>
         
-        if(index !== -1) {
-            const hoy = new Date().toLocaleString();
-            estudiantes[index].asistencias.push(hoy);
-            renderTabla();
-            // Pausar momentáneamente el lector o notificar
-            html5QrcodeScanner.pause(true);
-            Swal.fire({
-                title: 'Asistencia Registrada',
-                text: `${estudiantes[index].nombres} ${estudiantes[index].apellidos} - ${hoy}`,
-                icon: 'success',
-                timer: 2000,
-                showConfirmButton: false
-            }).then(() => {
-                html5QrcodeScanner.resume();
-            });
-        } else {
-            html5QrcodeScanner.pause(true);
-            Swal.fire({
-                title: 'No encontrado',
-                text: `El DNI ${dniEscaneado} no existe en la base de datos.`,
-                icon: 'error'
-            }).then(() => {
-                html5QrcodeScanner.resume();
+        <div id="reader"></div>
+        
+        <button id="btn-start" class="btn">📷 Activar Cámara</button>
+        <button id="btn-stop" class="btn btn-danger" style="display: none;">Detener Cámara</button>
+        
+        <div class="history-container">
+            <h3>Registros Guardados</h3>
+            <button id="btn-clear" class="btn btn-danger" style="font-size: 14px; padding: 8px;">🗑️ Borrar Historial</button>
+            <div id="history-list">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        let html5QrCode;
+        let isScanning = false;
+        
+        // Variables de la interfaz
+        const btnStart = document.getElementById('btn-start');
+        const btnStop = document.getElementById('btn-stop');
+        const btnClear = document.getElementById('btn-clear');
+        const readerDiv = document.getElementById('reader');
+        const historyList = document.getElementById('history-list');
+
+        // Cargar registros previos de la memoria del navegador
+        let registrosQR = JSON.parse(localStorage.getItem('registrosQR')) || [];
+
+        // Función para mostrar los registros en pantalla
+        function renderizarHistorial() {
+            historyList.innerHTML = '';
+            if (registrosQR.length === 0) {
+                historyList.innerHTML = '<p style="text-align:center; color:#888;">No hay registros aún.</p>';
+                return;
+            }
+            
+            // Mostrar los más recientes primero
+            const registrosInvertidos = [...registrosQR].reverse();
+            
+            registrosInvertidos.forEach(registro => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <strong>Dato: ${registro.dato}</strong>
+                    <span class="timestamp">📅 ${registro.fecha} ⏱️ ${registro.hora}</span>
+                `;
+                historyList.appendChild(div);
             });
         }
-    }
 
-    function onScanFailure(error) {
-        // Errores menores de lectura se ignoran silenciosamente para no saturar la consola
-    }
+        // Iniciar la cámara
+        btnStart.addEventListener('click', () => {
+            html5QrCode = new Html5Qrcode("reader");
+            
+            // Configuración: usar cámara trasera ('environment')
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+            .then(() => {
+                isScanning = true;
+                readerDiv.style.display = "block";
+                btnStart.style.display = "none";
+                btnStop.style.display = "block";
+            })
+            .catch(err => {
+                alert("Error al acceder a la cámara. Asegúrate de dar permisos y usar HTTPS.");
+                console.error(err);
+            });
+        });
 
-    // Inicializar la tabla al cargar
-    window.onload = renderTabla;
-</script>
+        // Detener la cámara
+        btnStop.addEventListener('click', detenerEscaner);
 
+        function detenerEscaner() {
+            if (isScanning && html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    isScanning = false;
+                    readerDiv.style.display = "none";
+                    btnStart.style.display = "block";
+                    btnStop.style.display = "none";
+                }).catch(err => {
+                    console.error("Error al detener", err);
+                });
+            }
+        }
+
+        // Qué hacer cuando se lee un código exitosamente
+        function onScanSuccess(decodedText, decodedResult) {
+            // Evitar escanear el mismo código múltiples veces en el mismo segundo
+            detenerEscaner(); // Detenemos la cámara temporalmente tras una lectura exitosa
+            
+            const ahora = new Date();
+            const fecha = ahora.toLocaleDateString('es-ES');
+            const hora = ahora.toLocaleTimeString('es-ES');
+
+            // Guardar en el arreglo
+            registrosQR.push({
+                dato: decodedText,
+                fecha: fecha,
+                hora: hora
+            });
+
+            // Guardar en LocalStorage
+            localStorage.setItem('registrosQR', JSON.stringify(registrosQR));
+            
+            // Actualizar interfaz
+            renderizarHistorial();
+            
+            alert(`¡Código escaneado con éxito!\n\nDato: ${decodedText}`);
+        }
+
+        // Borrar el historial
+        btnClear.addEventListener('click', () => {
+            if(confirm('¿Estás seguro de que deseas borrar todos los registros?')) {
+                registrosQR = [];
+                localStorage.removeItem('registrosQR');
+                renderizarHistorial();
+            }
+        });
+
+        // Renderizar la lista al cargar la página por primera vez
+        renderizarHistorial();
+    </script>
 </body>
 </html>
